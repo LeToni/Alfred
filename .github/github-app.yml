@@ -1,0 +1,17 @@
+# GitHub Copilot App Configuration for LeToni/Alfred
+
+# Branch protection rules
+branch-protection-rules:
+  - branch: main
+    required-status-checks:
+      - Finance Frontend Test  # Requires the CI workflow to pass
+    dismiss-stale-pr-approvals: true
+    require-code-owner-reviews: false
+
+# Test settings
+test:
+  enabled: true
+  command: npm test
+  working-directory: finance-app
+  on-pull-request: true
+  on-push-to-main: true

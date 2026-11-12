@@ -123,6 +123,10 @@ export class Finance implements OnInit {
     this.type = 'expense';
   }
 
+  deleteTransaction(id: string): void {
+    this.transactionService.deleteTransaction(id);
+  }
+
   formatDate(dateStr: string): string {
     return this.dateFormat.format(new Date(dateStr + 'T12:00:00'));
   }
