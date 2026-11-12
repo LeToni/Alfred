@@ -43,11 +43,31 @@
     .count { color: var(--muted); font-size: 12px; }
     .balance-label { color: var(--muted); font-size: 12px; margin: 22px 0 5px; }
     .balance { font-size: 32px; font-weight: 650; letter-spacing: -1px; overflow-wrap: anywhere; }
+    .balance.balanced { color: #000; }
+    .balance.positive { color: #527a50; }
+    .balance.negative { color: #b8594d; }
     .totals { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0 0; }
     .totals dt { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
     .totals dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
     .income { color: var(--accent); }
     .expense { color: var(--expense); }
+    .accounts-container { position: relative; margin: 20px 0; height: 120px; }
+    .account-card { position: absolute; width: 100%; top: 0; left: 0; cursor: pointer; transition: transform 200ms, box-shadow 200ms; }
+    .account-card:nth-child(1) { transform: translateY(0px) rotateZ(-2deg); z-index: 30; }
+    .account-card:nth-child(2) { transform: translateY(12px) rotateZ(1deg); z-index: 20; }
+    .account-card:nth-child(3) { transform: translateY(24px) rotateZ(-1deg); z-index: 10; }
+    .accounts-container:hover .account-card:nth-child(1) { transform: translateY(-80px) rotateZ(-8deg); z-index: 10; }
+    .accounts-container:hover .account-card:nth-child(2) { transform: translateY(0px) rotateZ(0deg); z-index: 30; }
+    .accounts-container:hover .account-card:nth-child(3) { transform: translateY(80px) rotateZ(8deg); z-index: 10; }
+    .account-card:hover { box-shadow: 0 20px 65px #30402a12; }
+    .account-card.active { z-index: 40; }
+    .account-card-header { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 20px; cursor: pointer; }
+    .account-card-name { font-size: 18px; font-weight: 650; margin: 0 0 8px; }
+    .account-card-balance { font-size: 28px; font-weight: 650; letter-spacing: -1px; overflow-wrap: anywhere; }
+    .account-card-balance.balanced { color: #000; }
+    .account-card-balance.positive { color: #527a50; }
+    .account-card-balance.negative { color: #b8594d; }
+    .account-card.active .account-card-header { background: var(--tint); }
     form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin: 20px; }
     .field { display: grid; gap: 6px; min-width: 0; color: var(--muted); font-size: 12px; }
     .wide { grid-column: 1 / -1; }
@@ -135,15 +155,16 @@
     <div class="eyebrow"><span class="mark" aria-hidden="true">$</span> A little more clarity</div>
     <h1>Little by little.</h1>
     <p class="subtitle">Know what comes in. See what goes out.<br>One small step toward peace of mind.</p>
+    <div class="accounts-container" id="accounts-container"></div>
     <section class="card" aria-labelledby="list-title">
       <header class="summary">
-        <div class="summary-line"><h2 id="list-title">Your money</h2><span class="count">All time &middot; USD</span></div>
+        <div class="summary-line"><h2 id="list-title">Main Account</h2><span class="count">All time &middot; EUR</span></div>
         <div aria-live="polite" aria-atomic="true">
           <p class="balance-label">Balance</p>
-          <div class="balance" id="balance">$0.00</div>
+          <div class="balance" id="balance">€0.00</div>
           <dl class="totals">
-            <div><dt>Income</dt><dd class="income" id="income">$0.00</dd></div>
-            <div><dt>Expenses</dt><dd class="expense" id="expenses">$0.00</dd></div>
+            <div><dt>Income</dt><dd class="income" id="income">€0.00</dd></div>
+            <div><dt>Expenses</dt><dd class="expense" id="expenses">€0.00</dd></div>
           </dl>
         </div>
       </header>
@@ -154,7 +175,7 @@
         <label class="field">Type
           <select id="type"><option value="expense">Expense</option><option value="income">Income</option></select>
         </label>
-        <label class="field">Amount (USD)
+        <label class="field">Amount (EUR)
           <input id="amount" type="number" placeholder="0.00" min="0.01" max="999999999.99" step="0.01" inputmode="decimal" required>
         </label>
         <label class="field wide">Date
@@ -309,16 +330,21 @@
     })();
 
     (() => {
-    const storageKey = 'little-by-little.finance.v1';
+    const accountStorageKey = 'little-by-little.accounts.v1';
+    const transactionStorageKey = 'little-by-little.finance.v2';
     const list = document.querySelector('#transactions');
     const input = document.querySelector('#description');
     const amountInput = document.querySelector('#amount');
     const typeInput = document.querySelector('#type');
     const dateInput = document.querySelector('#date');
     const error = document.querySelector('#storage-error');
-    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+    const accountsContainer = document.querySelector('#accounts-container');
+    const listTitle = document.querySelector('#list-title');
+    const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' });
     const dateFormat = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    let transactions = [];
+    let accounts = [];
+    let allTransactions = [];
+    let currentAccountId = null;
     let nextId = 0;
     let storageReady = true;
     const today = new Date();
@@ -343,12 +369,21 @@
 
     function save() {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(transactions));
+        localStorage.setItem(accountStorageKey, JSON.stringify(accounts));
+        localStorage.setItem(transactionStorageKey, JSON.stringify(allTransactions));
         error.hidden = true;
       } catch (cause) {
-        console.error('Unable to save transactions:', cause);
+        console.error('Unable to save data:', cause);
         showStorageError('Your changes could not be saved on this device. Keep this page open so you do not lose them.');
       }
+    }
+
+    function getTransactionsForAccount(accountId) {
+      return allTransactions.filter(t => t.accountId === accountId).sort((a, b) => b.date.localeCompare(a.date));
+    }
+
+    function getCurrentAccount() {
+      return accounts.find(a => a.id === currentAccountId);
     }
 
     function createTransaction(transaction) {
@@ -373,7 +408,7 @@
       remove.innerHTML = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M8 5V3h4v2M5 5l1 12h8l1-12M8 8v6m4-6v6"/></svg>';
       remove.addEventListener('click', () => {
         const next = item.nextElementSibling || item.previousElementSibling;
-        transactions = transactions.filter(candidate => candidate.id !== transaction.id);
+        allTransactions = allTransactions.filter(candidate => candidate.id !== transaction.id);
         item.remove();
         save();
         updateSummary();
@@ -385,6 +420,7 @@
     }
 
     function updateSummary() {
+      const transactions = getTransactionsForAccount(currentAccountId);
       let income = 0n;
       let expenses = 0n;
       for (const transaction of transactions) {
@@ -394,40 +430,144 @@
       document.querySelector('#income').textContent = formatMoney(income);
       document.querySelector('#expenses').textContent = formatMoney(expenses);
       const balance = document.querySelector('#balance');
-      balance.textContent = formatMoney(income - expenses);
-      balance.classList.toggle('expense', income < expenses);
+      const balanceDiff = income - expenses;
+      balance.textContent = formatMoney(balanceDiff);
+      balance.classList.remove('expense', 'positive', 'negative', 'balanced');
+      if (income === expenses) balance.classList.add('balanced');
+      else if (income > expenses) balance.classList.add('positive');
+      else balance.classList.add('negative');
       document.querySelector('#count').textContent = '(' + transactions.length + ')';
       document.querySelector('#empty').hidden = transactions.length !== 0;
     }
 
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored !== null) {
-        const parsed = JSON.parse(stored);
-        if (!Array.isArray(parsed) || !parsed.every(transaction =>
-          transaction && typeof transaction.id === 'string' &&
-          typeof transaction.description === 'string' && transaction.description.trim().length > 0 && transaction.description.length <= 300 &&
-          (transaction.type === 'income' || transaction.type === 'expense') &&
-          Number.isSafeInteger(transaction.cents) && transaction.cents > 0 && transaction.cents <= 99999999999 &&
-          validDate(transaction.date)
-        ) || new Set(parsed.map(transaction => transaction.id)).size !== parsed.length) {
-          throw new Error('Stored transactions have an invalid format.');
+    function loadAccounts() {
+      try {
+        const stored = localStorage.getItem(accountStorageKey);
+        if (stored !== null) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.every(acc => acc && typeof acc.id === 'string' && typeof acc.name === 'string' && acc.name.trim().length > 0)) {
+            accounts = parsed;
+          }
         }
-        transactions = parsed;
+        if (accounts.length === 0) {
+          accounts = [
+            { id: 'default-' + Date.now(), name: 'Main Account' },
+            { id: 'savings-' + Date.now(), name: 'Savings' }
+          ];
+        }
+      } catch (cause) {
+        console.error('Unable to load accounts:', cause);
+        storageReady = false;
+        showStorageError('Saved accounts could not be loaded. Adding entries is disabled to protect your data. Check browser storage access, then reload.');
+        document.querySelectorAll('#add-form input, #add-form select, #add-form button').forEach(control => control.disabled = true);
+        return;
       }
-    } catch (cause) {
-      console.error('Unable to load transactions:', cause);
-      storageReady = false;
-      showStorageError('Saved transactions could not be loaded. Adding entries is disabled to protect your data. Check browser storage access or recover the saved data, then reload.');
-      document.querySelectorAll('#add-form input, #add-form select, #add-form button').forEach(control => control.disabled = true);
+      populateAccountCards();
+      if (accounts.length > 0) {
+        currentAccountId = accounts[0].id;
+      }
     }
 
-    transactions.sort((a, b) => b.date.localeCompare(a.date));
-    list.append(...transactions.map(createTransaction));
-    updateSummary();
+    function populateAccountCards() {
+      accountsContainer.innerHTML = '';
+      for (const account of accounts) {
+        const card = document.createElement('div');
+        card.className = 'account-card' + (account.id === currentAccountId ? ' active' : '');
+        card.setAttribute('data-account-id', account.id);
+        
+        const transactions = getTransactionsForAccount(account.id);
+        let income = 0n;
+        let expenses = 0n;
+        for (const t of transactions) {
+          if (t.type === 'income') income += BigInt(t.cents);
+          else expenses += BigInt(t.cents);
+        }
+        const balance = income - expenses;
+        
+        let balanceClass = 'balanced';
+        if (income > expenses) balanceClass = 'positive';
+        else if (income < expenses) balanceClass = 'negative';
+        
+        card.innerHTML = `<div class="account-card-header">
+          <div class="account-card-name">${account.name}</div>
+          <div class="account-card-balance ${balanceClass}">${formatMoney(balance)}</div>
+        </div>`;
+        
+        card.addEventListener('click', () => {
+          currentAccountId = account.id;
+          // Reorder accounts array to put clicked account in the middle
+          const index = accounts.findIndex(a => a.id === account.id);
+          if (index !== -1 && index !== 1) {
+            const [clickedAccount] = accounts.splice(index, 1);
+            // Put it in the middle position (index 1)
+            accounts.splice(1, 0, clickedAccount);
+          }
+          populateAccountCards();
+          refreshTransactionList();
+        });
+        
+        accountsContainer.appendChild(card);
+      }
+    }
+
+    function loadTransactions() {
+      try {
+        const stored = localStorage.getItem(transactionStorageKey);
+        if (stored !== null) {
+          const parsed = JSON.parse(stored);
+          if (!Array.isArray(parsed) || !parsed.every(transaction =>
+            transaction && typeof transaction.id === 'string' &&
+            typeof transaction.accountId === 'string' &&
+            typeof transaction.description === 'string' && transaction.description.trim().length > 0 && transaction.description.length <= 300 &&
+            (transaction.type === 'income' || transaction.type === 'expense') &&
+            Number.isSafeInteger(transaction.cents) && transaction.cents > 0 && transaction.cents <= 99999999999 &&
+            validDate(transaction.date)
+          ) || new Set(parsed.map(transaction => transaction.id)).size !== parsed.length) {
+            throw new Error('Stored transactions have an invalid format.');
+          }
+          allTransactions = parsed;
+        } else {
+          // Create dummy transactions with income > expenses
+          const now = new Date();
+          const mainAccountId = 'default-' + Date.now();
+          const savingsAccountId = 'savings-' + Date.now();
+          allTransactions = [
+            { id: 'trans-1', accountId: mainAccountId, description: 'Salary', type: 'income', cents: 350000, date: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') },
+            { id: 'trans-2', accountId: mainAccountId, description: 'Groceries', type: 'expense', cents: 8500, date: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(Math.max(1, now.getDate() - 1)).padStart(2, '0') },
+            { id: 'trans-3', accountId: mainAccountId, description: 'Freelance', type: 'income', cents: 50000, date: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(Math.max(1, now.getDate() - 2)).padStart(2, '0') },
+            { id: 'trans-4', accountId: savingsAccountId, description: 'Transfer from checking', type: 'income', cents: 100000, date: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') }
+          ];
+          save();
+        }
+      } catch (cause) {
+        console.error('Unable to load transactions:', cause);
+        storageReady = false;
+        showStorageError('Saved transactions could not be loaded. Adding entries is disabled to protect your data. Check browser storage access or recover the saved data, then reload.');
+        document.querySelectorAll('#add-form input, #add-form select, #add-form button').forEach(control => control.disabled = true);
+      }
+    }
+
+    function refreshTransactionList() {
+      const transactions = getTransactionsForAccount(currentAccountId);
+      list.replaceChildren(...transactions.map(createTransaction));
+      updateSummary();
+      const account = getCurrentAccount();
+      if (account) {
+        listTitle.textContent = account.name;
+      }
+    }
+
+    loadAccounts();
+    loadTransactions();
+    refreshTransactionList();
+
     document.querySelector('#add-form').addEventListener('submit', event => {
       event.preventDefault();
-      if (!storageReady) return;
+      if (!storageReady || !currentAccountId) {
+        input.setCustomValidity('Please select an account first.');
+        input.reportValidity();
+        return;
+      }
       const description = input.value.trim();
       if (!description) {
         input.setCustomValidity('Please enter a description.');
@@ -448,15 +588,13 @@
       }
       let id;
       do { id = 'transaction-' + Date.now() + '-' + nextId++; }
-      while (transactions.some(transaction => transaction.id === id));
-      const transaction = { id, description, cents, type: typeInput.value, date: dateInput.value };
-      transactions.unshift(transaction);
-      transactions.sort((a, b) => b.date.localeCompare(a.date));
-      list.replaceChildren(...transactions.map(createTransaction));
+      while (allTransactions.some(transaction => transaction.id === id));
+      const transaction = { id, accountId: currentAccountId, description, cents, type: typeInput.value, date: dateInput.value };
+      allTransactions.unshift(transaction);
       input.value = '';
       amountInput.value = '';
       save();
-      updateSummary();
+      refreshTransactionList();
       input.focus();
     });
     [input, amountInput, dateInput].forEach(control => control.addEventListener('input', () => control.setCustomValidity('')));
