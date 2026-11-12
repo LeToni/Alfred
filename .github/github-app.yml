@@ -4,7 +4,7 @@
 branch-protection-rules:
   - branch: main
     required-status-checks:
-      - Test Suite  # Requires the CI workflow to pass
+      - Finance Frontend Test  # Requires the CI workflow to pass
     dismiss-stale-pr-approvals: true
     require-code-owner-reviews: false
 
