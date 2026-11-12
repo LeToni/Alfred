@@ -1,0 +1,105 @@
+<div class="finance-container">
+  <!-- Accounts Container -->
+  <div class="accounts-container">
+    <div 
+      *ngFor="let account of accounts; let i = index"
+      [class]="'account-card' + (isActive(account.id) ? ' active' : '')"
+      (click)="selectAccount(account.id)">
+      <div class="account-card-header">
+        <div class="account-card-name">{{ account.name }}</div>
+        <div [class]="'account-card-balance ' + getAccountBalanceClass(account.id)">
+          {{ formatMoney(getAccountBalance(account.id)) }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Section -->
+  <div class="card">
+    <div class="summary">
+      <div class="summary-line">
+        <h2>Balance</h2>
+        <span class="count">({{ transactions.length }})</span>
+      </div>
+      <div class="balance-label">Your money</div>
+      <div [class]="'balance ' + getBalanceClass(getSummary().balance)">
+        {{ formatMoney(getSummary().balance) }}
+      </div>
+      <div class="totals">
+        <dt>Income</dt>
+        <dd class="income">{{ formatMoney(getSummary().income) }}</dd>
+        <dt>Expenses</dt>
+        <dd class="expense">{{ formatMoney(getSummary().expenses) }}</dd>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Transaction Form -->
+  <form (ngSubmit)="addTransaction()">
+    <div class="field">
+      <label for="description">Description</label>
+      <input 
+        id="description"
+        [(ngModel)]="description"
+        name="description"
+        type="text"
+        placeholder="e.g., Groceries">
+    </div>
+    <div class="field">
+      <label for="amount">Amount (€)</label>
+      <input 
+        id="amount"
+        [(ngModel)]="amount"
+        name="amount"
+        type="text"
+        placeholder="0.00">
+    </div>
+    <div class="field">
+      <label for="type">Type</label>
+      <select id="type" [(ngModel)]="type" name="type">
+        <option value="expense">Expense</option>
+        <option value="income">Income</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="date">Date</label>
+      <input 
+        id="date"
+        [(ngModel)]="date"
+        name="date"
+        type="date">
+    </div>
+    <button type="submit" class="add">Add</button>
+  </form>
+
+  <!-- Transactions List -->
+  <div class="list-heading">
+    <h2>Transactions</h2>
+  </div>
+  <ul>
+    <li *ngIf="transactions.length === 0" style="text-align: center; color: var(--muted); padding: 20px;">
+      No transactions yet
+    </li>
+    <li *ngFor="let transaction of transactions" class="transaction">
+      <div class="transaction-details">
+        <div class="transaction-text">{{ transaction.description }}</div>
+        <div class="transaction-meta">
+          {{ transaction.type === 'income' ? 'Income' : 'Expense' }} · 
+          {{ formatDate(transaction.date) }}
+        </div>
+      </div>
+      <span [class]="'amount ' + transaction.type">
+        {{ transaction.type === 'income' ? '+' : '-' }}{{ formatMoney(cents(transaction.cents)) }}
+      </span>
+      <button 
+        type="button" 
+        class="delete"
+        (click)="deleteTransaction(transaction.id)"
+        [attr.aria-label]="'Delete transaction: ' + transaction.description">
+        <svg viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M3 5h14M8 5V3h4v2M5 5l1 12h8l1-12M8 8v6m4-6v6"/>
+        </svg>
+      </button>
+    </li>
+  </ul>
+</div>
