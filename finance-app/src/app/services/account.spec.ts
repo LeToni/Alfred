@@ -76,13 +76,13 @@ describe('AccountService', () => {
         accounts = accs;
         
         if (accounts.length > 0 && !resolved) {
+          resolved = true;
           const currentAccId = accounts[0].id;
           service.setCurrentAccount(currentAccId);
           const current = service.getCurrentAccount();
           
           expect(current).toBeTruthy();
           expect(current?.id).toBe(currentAccId);
-          resolved = true;
           resolve(null);
         }
       });
